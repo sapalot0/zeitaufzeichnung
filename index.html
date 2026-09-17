@@ -461,6 +461,7 @@ const LS_STORAGE_MODE = 'stundenbuch.storageMode';   // 'onedrive' | 'sharepoint
 const LS_SP_SITE = 'stundenbuch.spSite';
 const LS_SP_LIBRARY = 'stundenbuch.spLibrary';
 const LS_SP_FOLDER = 'stundenbuch.spFolder';
+const LS_SKIP_DEFAULTS = 'stundenbuch.skipDefaults';
 const DATA_FILE_PATH = 'stundenbuch-data.json';
 
 let GRAPH_SCOPES = ['User.Read', 'Files.ReadWrite.AppFolder'];
@@ -589,6 +590,7 @@ function renderSetupScreen(msg){
     localStorage.setItem(LS_CLIENT_ID, id);
     localStorage.setItem(LS_AUDIENCE, aud);
     localStorage.setItem(LS_STORAGE_MODE, mode);
+    localStorage.removeItem(LS_SKIP_DEFAULTS);
     location.reload();
   });
 }
@@ -619,6 +621,7 @@ function renderSigninScreen(){
 
 function resetConfig(){
   [LS_CLIENT_ID, LS_AUDIENCE, LS_TENANT_ID, LS_STORAGE_MODE, LS_SP_SITE, LS_SP_LIBRARY, LS_SP_FOLDER].forEach(k=>localStorage.removeItem(k));
+  localStorage.setItem(LS_SKIP_DEFAULTS, '1');
 }
 
 function renderAccessDenied(){
@@ -847,7 +850,20 @@ function renderSideFoot(){
   if(btn) btn.addEventListener('click', signOut);
 }
 
+const DEFAULT_CONFIG = {
+  [LS_CLIENT_ID]: '5f5c6a39-7c39-4c1b-a917-748b44ef58ae',
+  [LS_AUDIENCE]: 'tenant',
+  [LS_TENANT_ID]: 'd16e2968-17a2-4006-81f7-1f14f16ad869',
+  [LS_STORAGE_MODE]: 'sharepoint',
+  [LS_SP_SITE]: 'https://swsgastrogmbh.sharepoint.com/sites/SWSGastroGmbH',
+  [LS_SP_LIBRARY]: '',
+  [LS_SP_FOLDER]: 'BAR/Personal/Zeiterfassung',
+};
+
 (async function init(){
+  if(!localStorage.getItem(LS_CLIENT_ID) && localStorage.getItem(LS_SKIP_DEFAULTS)!=='1'){
+    Object.entries(DEFAULT_CONFIG).forEach(([k,v])=> localStorage.setItem(k, v));
+  }
   const clientId = localStorage.getItem(LS_CLIENT_ID);
   if(!clientId){ renderSetupScreen(); return; }
 
