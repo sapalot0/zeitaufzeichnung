@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stundenbuch — Arbeitszeiterfassung</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script type="text/javascript" src="https://alcdn.msauth.net/browser/2.38.1/js/msal-browser.min.js" crossorigin="anonymous"></script>
+<script type="text/javascript">
+  // Fallback auf die zweite Microsoft-CDN-Region, falls die erste nicht erreichbar ist
+  if (typeof msal === 'undefined') document.write(unescape('%3Cscript src=\'https://alcdn.msftauth.net/browser/2.38.1/js/msal-browser.min.js\' type=\'text/javascript\'%3E%3C/script%3E'));
+</script>
+<style>
+  :root{
+    --paper:#EEF2EF;
+    --surface:#FFFFFF;
+    --surface-alt:#E3E9E5;
+    --ink:#17231F;
+    --ink-soft:#5B6B64;
+    --line:#C7D1CB;
+    --accent:#A3752E;
+    --accent-ink:#6B4A17;
+    --accent-soft:#F1E4C9;
+    --ok:#2E6F52;
+    --ok-soft:#DCEEE3;
+    --danger:#A23A33;
+    --danger-soft:#F4DFDC;
+    --shadow: 0 1px 2px rgba(23,35,31,.06), 0 6px 16px rgba(23,35,31,.05);
+    --radius: 3px;
+    --font-ui: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-num: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#14191A;
+      --surface:#1C2325;
+      --surface-alt:#232B2C;
+      --ink:#E6ECE8;
+      --ink-soft:#98A6A0;
+      --line:#33403F;
+      --accent:#D8A75C;
+      --accent-ink:#F2DDAF;
+      --accent-soft:#372C19;
+      --ok:#68BA93;
+      --ok-soft:#1D332A;
+      --danger:#E3897F;
+      --danger-soft:#3A2320;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#14191A;
+    --surface:#1C2325;
+    --surface-alt:#232B2C;
+    --ink:#E6ECE8;
+    --ink-soft:#98A6A0;
+    --line:#33403F;
+    --accent:#D8A75C;
+    --accent-ink:#F2DDAF;
+    --accent-soft:#372C19;
+    --ok:#68BA93;
+    --ok-soft:#1D332A;
+    --danger:#E3897F;
+    --danger-soft:#3A2320;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    font-size:14px;
+    line-height:1.5;
+    min-height:100vh;
+  }
+  ::selection{background:var(--accent-soft);}
+  button{font-family:inherit;}
+  input,select{font-family:inherit;}
+
+  .shell{display:flex;min-height:100vh;}
+
+  /* ---- Sidebar ---- */
+  .side{
+    width:216px;
+    flex:none;
+    border-right:1px solid var(--line);
+    padding:22px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:26px;
+  }
+  .brand{padding:0 8px;}
+  .brand-mark{
+    font-family:var(--font-num);
+    font-size:11px;
+    letter-spacing:.06em;
+    color:var(--accent-ink);
+    background:var(--accent-soft);
+    display:inline-block;
+    padding:2px 6px;
+    border-radius:2px;
+    margin-bottom:8px;
+  }
+  .brand h1{
+    font-size:19px;
+    margin:0;
+    font-weight:600;
+    letter-spacing:-.01em;
+  }
+  .brand p{margin:4px 0 0;font-size:12px;color:var(--ink-soft);}
+
+  nav{display:flex;flex-direction:column;gap:2px;}
+  .navlink{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:9px 10px;
+    border-radius:var(--radius);
+    color:var(--ink-soft);
+    cursor:pointer;
+    border-left:2px solid transparent;
+    font-size:13.5px;
+    transition:background .12s ease, color .12s ease;
+  }
+  .navlink:hover{background:var(--surface-alt);color:var(--ink);}
+  .navlink.active{
+    color:var(--ink);
+    background:var(--surface-alt);
+    border-left:2px solid var(--accent);
+    font-weight:600;
+  }
+  .navlink .n{
+    font-family:var(--font-num);
+    font-size:11px;
+    color:var(--ink-soft);
+    width:16px;
+  }
+
+  .side-foot{margin-top:auto;font-size:11px;color:var(--ink-soft);padding:0 8px;}
+
+  /* ---- Main ---- */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    padding:18px 30px;
+    border-bottom:1px solid var(--line);
+    background:var(--surface);
+  }
+  .topbar h2{margin:0;font-size:16px;font-weight:600;}
+  .topbar .sub{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .empselect{display:flex;align-items:center;gap:8px;}
+  .empselect label{font-size:12px;color:var(--ink-soft);}
+
+  .content{padding:26px 30px 60px;max-width:980px;}
+  .content.center{display:flex;align-items:center;justify-content:center;min-height:92vh;max-width:none;padding:20px;}
+  .authcard{max-width:440px;width:100%;}
+  .authcard .btn{width:100%;justify-content:center;}
+
+  /* ---- Form controls ---- */
+  select, input[type=text], input[type=date], input[type=month], input[type=time], input[type=number]{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:7px 9px;
+    color:var(--ink);
+    font-size:13.5px;
+  }
+  input[type=time], input[type=number]{font-family:var(--font-num);}
+  select:focus, input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    border-radius:var(--radius);
+    padding:8px 14px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .btn:hover{opacity:.88;}
+  .btn.secondary{background:var(--surface);color:var(--ink);border:1px solid var(--line);}
+  .btn.accent{background:var(--accent);color:#241a08;}
+  .btn.danger{background:var(--danger-soft);color:var(--danger);}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .btn.small{padding:5px 10px;font-size:12px;}
+  .linkbtn{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:12px;padding:2px 4px;text-decoration:underline;text-underline-offset:2px;}
+  .linkbtn:hover{color:var(--danger);}
+
+  /* ---- Card / table ---- */
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:6px;
+    box-shadow:var(--shadow);
+    padding:20px 22px;
+    margin-bottom:20px;
+  }
+  .card h3{margin:0 0 4px;font-size:14px;font-weight:600;}
+  .card .hint{font-size:12px;color:var(--ink-soft);margin:0 0 14px;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;}
+  .field{display:flex;flex-direction:column;gap:4px;}
+  .field label{font-size:11.5px;color:var(--ink-soft);}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{
+    text-align:left;
+    font-size:11px;
+    text-transform:none;
+    color:var(--ink-soft);
+    font-weight:600;
+    padding:8px 10px;
+    border-bottom:1px solid var(--line);
+  }
+  td{padding:8px 10px;border-bottom:1px solid var(--line);}
+  tr:last-child td{border-bottom:none;}
+  td.num, th.num{font-family:var(--font-num);text-align:right;}
+  tr.total td{font-weight:700;border-top:1px solid var(--ink);border-bottom:none;}
+  tr.weekend td{background:var(--surface-alt);}
+  tr.today td{background:var(--accent-soft);}
+
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
+  .pill.ok{background:var(--ok-soft);color:var(--ok);}
+  .pill.bad{background:var(--danger-soft);color:var(--danger);}
+  .pill.neutral{background:var(--surface-alt);color:var(--ink-soft);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px 18px;box-shadow:var(--shadow);}
+  .stat .label{font-size:11.5px;color:var(--ink-soft);margin-bottom:6px;}
+  .stat .value{font-family:var(--font-num);font-size:24px;font-weight:600;letter-spacing:-.01em;}
+  .stat .value.ok{color:var(--ok);}
+  .stat .value.bad{color:var(--danger);}
+
+  .empty{
+    border:1px dashed var(--line);
+    border-radius:6px;
+    padding:34px 20px;
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:13px;
+  }
+
+  .weekbar{display:flex;align-items:center;gap:14px;margin-bottom:16px;}
+  .weekbar .lbl{font-family:var(--font-num);font-size:13px;color:var(--ink-soft);}
+
+  .toast{
+    position:fixed;bottom:20px;right:20px;
+    background:var(--ink);color:var(--paper);
+    padding:10px 16px;border-radius:var(--radius);
+    font-size:13px;box-shadow:var(--shadow);
+    opacity:0;transform:translateY(6px);
+    transition:opacity .18s ease, transform .18s ease;
+    pointer-events:none;
+    z-index:50;
+  }
+  .toast.show{opacity:1;transform:translateY(0);}
+
+  .print-head{display:none;}
+
+  @media (max-width: 760px){
+    .shell{flex-direction:column;}
+    .side{
+      width:100%;flex-direction:row;align-items:center;flex-wrap:wrap;
+      padding:12px 14px;gap:10px;border-right:none;border-bottom:1px solid var(--line);
+    }
+    .brand{padding:0;}
+    .side-foot{display:none;}
+    nav{flex-direction:row;flex-wrap:wrap;}
+    .content{padding:18px 16px 50px;}
+    .topbar{padding:14px 16px;flex-wrap:wrap;}
+    .stat-grid{grid-template-columns:1fr;}
+    table{display:block;overflow-x:auto;white-space:nowrap;}
+  }
+
+  @media print{
+    body *{visibility:hidden;}
+    .printable, .printable *{visibility:visible;}
+    .printable{position:absolute;top:0;left:0;width:100%;padding:0;margin:0;}
+    .print-head{display:block;margin-bottom:18px;}
+    .print-head h1{font-size:18px;margin:0 0 2px;}
+    .print-head .meta{font-size:12px;color:#444;}
+    .sign{margin-top:60px;display:flex;gap:60px;}
+    .sign .line{border-top:1px solid #333;padding-top:6px;font-size:11px;color:#444;width:220px;}
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side no-print">
+    <div class="brand">
+      <span class="brand-mark">ZEITERFASSUNG</span>
+      <h1>Stundenbuch</h1>
+      <p>Arbeitszeiten &amp; Sollstunden</p>
+    </div>
+    <nav id="nav"></nav>
+    <div class="side-foot" id="sideFoot">Verbinde mit OneDrive …</div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar no-print">
+      <div>
+        <h2 id="topTitle">—</h2>
+        <div class="sub" id="topSub"></div>
+      </div>
+      <div class="empselect" id="empSelectWrap"></div>
+    </div>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------------------------------------------------------
+   Stundenbuch — Arbeitszeiterfassung (OneDrive-Version)
+   Anmeldung: MSAL.js (Microsoft-Konto), Speicherung: Microsoft Graph
+   Eine einzelne Datei im App-Ordner des OneDrive-Kontos:
+     /me/drive/special/approot:/stundenbuch-data.json:/content
+     { employees: [...], targets: [...], entries: [...] }
+   ------------------------------------------------------------- */
+
+const WEEKDAYS = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
+const MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+
+let db = null;
+let employees = [];
+let targets = [];
+let entries = [];
+let currentTab = 'mitarbeiter';
+let currentEmployeeId = null;
+let weekAnchor = fmtDate(new Date());
+let monthPick = todayMonth();
+let yearPick = new Date().getFullYear();
+let editingEmployeeId = null;
+let stichtag = todayStr();
+
+const TABS = [
+  {id:'mitarbeiter', label:'Mitarbeiter', n:'01'},
+  {id:'sollstunden', label:'Sollstunden', n:'02'},
+  {id:'zeiterfassung', label:'Zeiterfassung', n:'03'},
+  {id:'monat', label:'Monatsübersicht', n:'04'},
+  {id:'jahr', label:'Jahresübersicht', n:'05'},
+  {id:'gesamt', label:'Alle Mitarbeiter', n:'06'},
+];
+
+function fmtDate(d){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function todayMonth(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+function todayStr(){ return fmtDate(new Date()); }
+function parseDate(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function weekdayIdx(dateStr){ const d=parseDate(dateStr); const wd=d.getDay(); return wd===0?6:wd-1; }
+function daysInMonth(y,m){ return new Date(y,m,0).getDate(); }
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtHours(h){ return (Math.round((h||0)*100)/100).toFixed(2).replace('.',','); }
+function fmtTimeShort(s){ return s || '—'; }
+
+function calcHours(start,end){
+  if(!start||!end) return null;
+  const [sh,sm]=start.split(':').map(Number);
+  const [eh,em]=end.split(':').map(Number);
+  const startMin=sh*60+sm, endMin=eh*60+em;
+  if(endMin<=startMin) return null;
+  return Math.round(((endMin-startMin)/60)*100)/100;
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  clearTimeout(toast._h);
+  toast._h=setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+function currentEmployee(){ return employees.find(e=>e.id===currentEmployeeId) || null; }
+
+/* ------------------------- OneDrive-Anbindung (MSAL + Microsoft Graph) ------------------------- */
+const LS_CLIENT_ID = 'stundenbuch.clientId';
+const LS_AUDIENCE = 'stundenbuch.audience';
+const LS_STORAGE_MODE = 'stundenbuch.storageMode';   // 'onedrive' | 'sharepoint'
+const LS_SP_SITE = 'stundenbuch.spSite';
+const LS_SP_LIBRARY = 'stundenbuch.spLibrary';
+const LS_SP_FOLDER = 'stundenbuch.spFolder';
+const DATA_FILE_PATH = 'stundenbuch-data.json';
+
+let GRAPH_SCOPES = ['User.Read', 'Files.ReadWrite.AppFolder'];
+let dataFileGraphPath = null; // wird nach der Anmeldung aufgelöst (OneDrive-Appordner oder SharePoint-Bibliothek)
+
+function scopesForMode(mode){
+  return mode==='sharepoint' ? ['User.Read','Sites.ReadWrite.All'] : ['User.Read','Files.ReadWrite.AppFolder'];
+}
+
+let msalInstance = null;
+let account = null;
+let store = { employees: [], targets: [], entries: [] };
+
+function authorityFor(audience){
+  if(audience==='consumers') return 'https://login.microsoftonline.com/consumers';
+  if(audience==='organizations') return 'https://login.microsoftonline.com/organizations';
+  return 'https://login.microsoftonline.com/common';
+}
+
+function showShell(show){
+  document.querySelector('.side').style.display = show?'':'none';
+  document.querySelector('.topbar').style.display = show?'':'none';
+}
+
+function renderSetupScreen(msg){
+  showShell(false);
+  const c = document.getElementById('content');
+  c.className = 'content center';
+  const savedId = localStorage.getItem(LS_CLIENT_ID) || '';
+  const savedMode = localStorage.getItem(LS_STORAGE_MODE) || 'onedrive';
+  const savedSite = localStorage.getItem(LS_SP_SITE) || '';
+  const savedLibrary = localStorage.getItem(LS_SP_LIBRARY) || '';
+  const savedFolder = localStorage.getItem(LS_SP_FOLDER) || 'Stundenbuch';
+  c.innerHTML = `
+    <div class="card authcard">
+      <h3>Einrichtung</h3>
+      <p class="hint">Diese App speichert ihre Daten in Microsoft 365. Dafür braucht sie einmalig eine App-Registrierung (Anleitung: SETUP.md). Trage hier die dabei erzeugte Client-ID ein.</p>
+      <div class="field" style="margin-bottom:12px;">
+        <label for="setClientId">Client-ID (Anwendungs-ID)</label>
+        <input type="text" id="setClientId" placeholder="z. B. 3f8a1c2e-7b41-4a9d-9c2a-…" value="${esc(savedId)}" style="width:100%;">
+      </div>
+      <div class="field" style="margin-bottom:16px;">
+        <label for="setAudience">Kontotyp</label>
+        <select id="setAudience" style="width:100%;">
+          <option value="common">Privat oder geschäftlich (beides)</option>
+          <option value="consumers">Privates Microsoft-Konto (Outlook/Live/Hotmail)</option>
+          <option value="organizations">Geschäfts-/Schulkonto (Microsoft 365)</option>
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label for="setStorageMode">Speicherort</label>
+        <select id="setStorageMode" style="width:100%;">
+          <option value="onedrive">Persönliches OneDrive (App-Ordner)</option>
+          <option value="sharepoint">SharePoint-Bibliothek eines Teams</option>
+        </select>
+      </div>
+      <div id="spFields" style="display:none;">
+        <div class="field" style="margin-bottom:12px;">
+          <label for="setSpSite">SharePoint-Site-URL</label>
+          <input type="text" id="setSpSite" placeholder="https://firma.sharepoint.com/sites/Teamname" value="${esc(savedSite)}" style="width:100%;">
+        </div>
+        <div class="row" style="margin-bottom:16px;">
+          <div class="field" style="flex:1;">
+            <label for="setSpLibrary">Bibliothek (optional)</label>
+            <input type="text" id="setSpLibrary" placeholder="Standard: Dokumente" value="${esc(savedLibrary)}" style="width:100%;">
+          </div>
+          <div class="field" style="flex:1;">
+            <label for="setSpFolder">Ordner in der Bibliothek</label>
+            <input type="text" id="setSpFolder" value="${esc(savedFolder)}" style="width:100%;">
+          </div>
+        </div>
+      </div>
+      ${msg?`<p class="hint" style="color:var(--danger);">${esc(msg)}</p>`:''}
+      <button class="btn accent" id="setSave">Speichern &amp; fortfahren</button>
+    </div>
+  `;
+  document.getElementById('setAudience').value = localStorage.getItem(LS_AUDIENCE) || 'common';
+  const modeSel = document.getElementById('setStorageMode');
+  modeSel.value = savedMode;
+  const spFields = document.getElementById('spFields');
+  spFields.style.display = savedMode==='sharepoint' ? '' : 'none';
+  modeSel.addEventListener('change', ()=>{ spFields.style.display = modeSel.value==='sharepoint' ? '' : 'none'; });
+  document.getElementById('setSave').addEventListener('click', ()=>{
+    const id = document.getElementById('setClientId').value.trim();
+    const aud = document.getElementById('setAudience').value;
+    const mode = document.getElementById('setStorageMode').value;
+    if(!id){ toast('Bitte die Client-ID eintragen.'); return; }
+    if(mode==='sharepoint'){
+      const site = document.getElementById('setSpSite').value.trim();
+      if(!site){ toast('Bitte die SharePoint-Site-URL eintragen.'); return; }
+      try{ new URL(site); }catch(e){ toast('Das ist keine gültige URL.'); return; }
+      localStorage.setItem(LS_SP_SITE, site);
+      localStorage.setItem(LS_SP_LIBRARY, document.getElementById('setSpLibrary').value.trim());
+      localStorage.setItem(LS_SP_FOLDER, document.getElementById('setSpFolder').value.trim());
+    }
+    localStorage.setItem(LS_CLIENT_ID, id);
+    localStorage.setItem(LS_AUDIENCE, aud);
+    localStorage.setItem(LS_STORAGE_MODE, mode);
+    location.reload();
+  });
+}
+
+function renderSigninScreen(){
+  showShell(false);
+  const c = document.getElementById('content');
+  c.className = 'content center';
+  const mode = localStorage.getItem(LS_STORAGE_MODE) || 'onedrive';
+  const target = mode==='sharepoint' ? 'die SharePoint-Bibliothek' : 'dein OneDrive';
+  c.innerHTML = `
+    <div class="card authcard" style="text-align:center;">
+      <h3>Anmelden</h3>
+      <p class="hint">Melde dich mit dem Microsoft-Konto an, das Zugriff auf ${target} hat, in der die Arbeitszeiten gespeichert werden sollen.</p>
+      <button class="btn accent" id="signinBtn">Mit Microsoft-Konto anmelden</button>
+      <p class="hint" style="margin-top:16px;"><button class="linkbtn" id="reconfigBtn">Einstellungen ändern</button></p>
+    </div>
+  `;
+  document.getElementById('signinBtn').addEventListener('click', ()=>{
+    msalInstance.loginRedirect({ scopes: GRAPH_SCOPES }).catch(e=> toast('Anmeldung fehlgeschlagen: '+e.message));
+  });
+  document.getElementById('reconfigBtn').addEventListener('click', ()=>{
+    resetConfig();
+    location.reload();
+  });
+}
+
+function resetConfig(){
+  [LS_CLIENT_ID, LS_AUDIENCE, LS_STORAGE_MODE, LS_SP_SITE, LS_SP_LIBRARY, LS_SP_FOLDER].forEach(k=>localStorage.removeItem(k));
+}
+
+function renderLoadError(message){
+  showShell(false);
+  const c = document.getElementById('content');
+  c.className = 'content center';
+  c.innerHTML = `
+    <div class="card authcard">
+      <h3>Fehler beim Zugriff auf OneDrive</h3>
+      <p class="hint">${esc(message)}</p>
+      <div class="row">
+        <button class="btn secondary" id="retryBtn">Erneut versuchen</button>
+        <button class="btn secondary" id="signoutBtn">Abmelden</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('retryBtn').addEventListener('click', ()=> location.reload());
+  document.getElementById('signoutBtn').addEventListener('click', signOut);
+}
+
+async function signOut(){
+  try{ await msalInstance.logoutRedirect({ account }); }catch(e){ location.reload(); }
+}
+
+async function ensureToken(){
+  const req = { scopes: GRAPH_SCOPES, account };
+  try{
+    const res = await msalInstance.acquireTokenSilent(req);
+    return res.accessToken;
+  }catch(e){
+    await msalInstance.acquireTokenRedirect(req); // Seite navigiert weg, kein Rückgabewert nötig
+    return null;
+  }
+}
+
+async function graphFetch(path, options){
+  const token = await ensureToken();
+  if(!token) return null; // interaktive Anmeldung läuft, Seite navigiert weg
+  const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
+    ...(options||{}),
+    headers: { ...((options&&options.headers)||{}), Authorization: `Bearer ${token}` },
+  });
+  return res;
+}
+
+function encodeGraphSegment(s){ return encodeURIComponent(s).replace(/%20/g,' '); }
+
+async function ensureFolder(driveId, name){
+  const checkRes = await graphFetch(`/drives/${driveId}/root:/${encodeGraphSegment(name)}`);
+  if(!checkRes) return false;
+  if(checkRes.status===404){
+    const createRes = await graphFetch(`/drives/${driveId}/root/children`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name, folder:{}, '@microsoft.graph.conflictBehavior':'fail' }),
+    });
+    if(!createRes) return false;
+    if(!createRes.ok && createRes.status!==409){
+      throw new Error('Der Ordner konnte in der Bibliothek nicht angelegt werden. Prüfe, ob das Konto Schreibrechte auf der Site hat.');
+    }
+  } else if(!checkRes.ok){
+    throw new Error(`Zugriff auf die Bibliothek fehlgeschlagen (HTTP ${checkRes.status}).`);
+  }
+  return true;
+}
+
+/* Löst den Speicherort auf: persönlicher OneDrive-App-Ordner oder eine SharePoint-Team-Bibliothek.
+   Setzt die globale Variable dataFileGraphPath, die alle Lese-/Schreibzugriffe verwenden. */
+async function resolveStorageTarget(){
+  const mode = localStorage.getItem(LS_STORAGE_MODE) || 'onedrive';
+  if(mode!=='sharepoint'){
+    dataFileGraphPath = `/me/drive/special/approot:/${DATA_FILE_PATH}`;
+    return true;
+  }
+
+  const siteUrl = (localStorage.getItem(LS_SP_SITE) || '').trim();
+  const libraryName = (localStorage.getItem(LS_SP_LIBRARY) || '').trim();
+  const folderName = (localStorage.getItem(LS_SP_FOLDER) || '').trim();
+
+  let u;
+  try{ u = new URL(siteUrl); }catch(e){ throw new Error('Die hinterlegte SharePoint-Site-URL ist ungültig. Bitte in den Einstellungen korrigieren.'); }
+  const relPath = u.pathname.replace(/\/$/,'');
+
+  const siteRes = await graphFetch(`/sites/${u.hostname}:${relPath}`);
+  if(!siteRes) return false;
+  if(!siteRes.ok) throw new Error(`Die SharePoint-Site wurde nicht gefunden (HTTP ${siteRes.status}). Bitte die Site-URL und die Kontoberechtigung prüfen.`);
+  const site = await siteRes.json();
+
+  let driveId;
+  if(libraryName){
+    const drivesRes = await graphFetch(`/sites/${site.id}/drives`);
+    if(!drivesRes) return false;
+    if(!drivesRes.ok) throw new Error('Die Bibliotheken dieser Site konnten nicht geladen werden.');
+    const drives = (await drivesRes.json()).value || [];
+    const match = drives.find(d=> (d.name||'').toLowerCase()===libraryName.toLowerCase());
+    if(!match) throw new Error(`Die Bibliothek „${libraryName}" wurde auf dieser Site nicht gefunden.`);
+    driveId = match.id;
+  } else {
+    const driveRes = await graphFetch(`/sites/${site.id}/drive`);
+    if(!driveRes) return false;
+    if(!driveRes.ok) throw new Error('Die Standard-Dokumentbibliothek dieser Site konnte nicht geladen werden.');
+    driveId = (await driveRes.json()).id;
+  }
+
+  if(folderName){
+    const ok = await ensureFolder(driveId, folderName);
+    if(!ok) return false;
+    dataFileGraphPath = `/drives/${driveId}/root:/${encodeGraphSegment(folderName)}/${DATA_FILE_PATH}`;
+  } else {
+    dataFileGraphPath = `/drives/${driveId}/root:/${DATA_FILE_PATH}`;
+  }
+  return true;
+}
+
+async function loadStoreFromOneDrive(){
+  const res = await graphFetch(`${dataFileGraphPath}:/content`);
+  if(!res) return false; // Weiterleitung zur Anmeldung läuft
+  if(res.status===404){ store = { employees: [], targets: [], entries: [] }; return true; }
+  if(!res.ok) throw new Error(`Zugriff auf die gespeicherten Daten fehlgeschlagen (HTTP ${res.status}). Bitte Berechtigungen der App-Registrierung prüfen.`);
+  const data = await res.json();
+  store = {
+    employees: Array.isArray(data.employees)?data.employees:[],
+    targets: Array.isArray(data.targets)?data.targets:[],
+    entries: Array.isArray(data.entries)?data.entries:[],
+  };
+  return true;
+}
+
+let writeChain = Promise.resolve();
+function persistStore(){
+  writeChain = writeChain.then(async ()=>{
+    const res = await graphFetch(`${dataFileGraphPath}:/content`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(store),
+    });
+    if(res && !res.ok) throw new Error(`Speichern auf OneDrive fehlgeschlagen (HTTP ${res.status}).`);
+  }).catch(e=>{ toast(e.message || 'Speichern auf OneDrive fehlgeschlagen.'); throw e; });
+  return writeChain;
+}
+
+/* db-Schnittstelle wie zuvor, jetzt hinter Microsoft Graph statt eigenem Server */
+const COLLECTIONS = ['employees','targets','entries'];
+const listeners = { employees: [], targets: [], entries: [] };
+
+function notify(name){ listeners[name].forEach(fn=>fn(store[name])); }
+function notifyAll(){ COLLECTIONS.forEach(notify); }
+function upsert(name, doc){
+  const list = store[name];
+  const idx = list.findIndex(d=>d.id===doc.id);
+  if(idx>=0) list[idx] = { ...list[idx], ...doc }; else list.push(doc);
+}
+
+function makeOneDriveDb(){
+  return {
+    collection(name){
+      return {
+        onSnapshot(next){
+          listeners[name].push(next);
+          next(store[name]);
+          return ()=>{ listeners[name] = listeners[name].filter(fn=>fn!==next); };
+        },
+        doc(id){
+          return {
+            id,
+            async set(data){ upsert(name, {...data, id}); await persistStore(); notify(name); },
+            async update(data){ upsert(name, {...data, id}); await persistStore(); notify(name); },
+            async delete(){
+              store[name] = store[name].filter(d=>d.id!==id);
+              if(name==='employees'){
+                store.targets = store.targets.filter(t=>t.employeeId!==id);
+                store.entries = store.entries.filter(e=>e.employeeId!==id);
+              }
+              await persistStore();
+              notifyAll();
+            },
+          };
+        },
+        async add(data){
+          const id = crypto.randomUUID();
+          store[name].push({ ...data, id });
+          await persistStore();
+          notify(name);
+          return { id };
+        },
+      };
+    },
+  };
+}
+
+function renderSideFoot(){
+  const el = document.getElementById('sideFoot');
+  const name = account ? (account.name || account.username) : '';
+  const mode = localStorage.getItem(LS_STORAGE_MODE) || 'onedrive';
+  const targetLabel = mode==='sharepoint' ? 'SharePoint-Bibliothek' : 'OneDrive';
+  el.innerHTML = `Angemeldet als ${esc(name)}<br><span style="opacity:.8;">Speicherort: ${targetLabel}</span><br><button class="linkbtn" id="signoutLink" style="margin-top:4px;">Abmelden</button>`;
+  const btn = document.getElementById('signoutLink');
+  if(btn) btn.addEventListener('click', signOut);
+}
+
+(async function init(){
+  const clientId = localStorage.getItem(LS_CLIENT_ID);
+  if(!clientId){ renderSetupScreen(); return; }
+
+  const audience = localStorage.getItem(LS_AUDIENCE) || 'common';
+  const storageMode = localStorage.getItem(LS_STORAGE_MODE) || 'onedrive';
+  GRAPH_SCOPES = scopesForMode(storageMode);
+
+  msalInstance = new msal.PublicClientApplication({
+    auth: {
+      clientId,
+      authority: authorityFor(audience),
+      redirectUri: window.location.origin + window.location.pathname,
+    },
+    cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false },
+  });
+
+  try{
+    const redirectResult = await msalInstance.handleRedirectPromise();
+    if(redirectResult && redirectResult.account){ account = redirectResult.account; }
+  }catch(e){
+    renderSetupScreen('Anmeldung fehlgeschlagen: ' + e.message + ' Bitte Client-ID und Kontotyp prüfen.');
+    return;
+  }
+
+  if(!account){
+    const accounts = msalInstance.getAllAccounts();
+    if(accounts.length) account = accounts[0];
+  }
+  if(!account){ renderSigninScreen(); return; }
+  msalInstance.setActiveAccount(account);
+
+  db = makeOneDriveDb();
+
+  try{
+    const targetOk = await resolveStorageTarget();
+    if(!targetOk) return; // Weiterleitung zur Anmeldung läuft
+    const ok = await loadStoreFromOneDrive();
+    if(!ok) return; // Weiterleitung zur Anmeldung läuft
+  }catch(e){
+    renderLoadError(e.message);
+    return;
+  }
+
+  document.getElementById('content').className = 'content';
+  showShell(true);
+  renderSideFoot();
+
+  db.collection('employees').onSnapshot(arr=>{
+    employees = arr.slice().sort((a,b)=> (a.name||'').localeCompare(b.name||'','de'));
+    if(!currentEmployeeId && employees.length){ currentEmployeeId = employees[0].id; }
+    if(currentEmployeeId && !employees.find(e=>e.id===currentEmployeeId)){ currentEmployeeId = employees.length?employees[0].id:null; }
+    render();
+  });
+  db.collection('targets').onSnapshot(arr=>{ targets = arr; render(); });
+  db.collection('entries').onSnapshot(arr=>{ entries = arr; render(); });
+
+  render();
+})();
+
+/* ------------------------------ render ------------------------------ */
+function render(){
+  if(!db) return;
+  renderNav();
+  renderEmpSelect();
+  const map = {
+    mitarbeiter: renderMitarbeiter,
+    sollstunden: renderSollstunden,
+    zeiterfassung: renderZeiterfassung,
+    monat: renderMonat,
+    jahr: renderJahr,
+    gesamt: renderGesamt,
+  };
+  const titles = {
+    mitarbeiter: ['Mitarbeiter','Stammdaten anlegen und pflegen'],
+    sollstunden: ['Sollstunden','Monatliche Soll-Arbeitsstunden je Mitarbeiter'],
+    zeiterfassung: ['Zeiterfassung','Geleistete Stunden je Kalenderwoche erfassen'],
+    monat: ['Monatsübersicht','Alle Tage eines Monats, druckbar zur Bestätigung'],
+    jahr: ['Jahresübersicht','Soll/Ist-Vergleich und Gutstunden im Jahresverlauf'],
+    gesamt: ['Alle Mitarbeiter','Salden aller Mitarbeiter zu einem Stichtag, druckbar'],
+  };
+  document.getElementById('topTitle').textContent = titles[currentTab][0];
+  document.getElementById('topSub').textContent = titles[currentTab][1];
+  map[currentTab]();
+}
+
+function renderNav(){
+  const nav=document.getElementById('nav');
+  nav.innerHTML = TABS.map(t=>`
+    <div class="navlink ${t.id===currentTab?'active':''}" data-tab="${t.id}">
+      <span class="n">${t.n}</span><span>${t.label}</span>
+    </div>`).join('');
+  nav.querySelectorAll('.navlink').forEach(el=>{
+    el.addEventListener('click', ()=>{ currentTab = el.dataset.tab; render(); });
+  });
+}
+
+function renderEmpSelect(){
+  const wrap=document.getElementById('empSelectWrap');
+  if(currentTab==='mitarbeiter' || currentTab==='gesamt'){ wrap.innerHTML=''; return; }
+  if(!employees.length){
+    wrap.innerHTML = `<span class="sub" style="color:var(--ink-soft);font-size:12px;">Noch kein Mitarbeiter angelegt</span>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <label for="empSel">Mitarbeiter</label>
+    <select id="empSel">
+      ${employees.map(e=>`<option value="${e.id}" ${e.id===currentEmployeeId?'selected':''}>${esc(e.name)}</option>`).join('')}
+    </select>`;
+  document.getElementById('empSel').addEventListener('change', e=>{
+    currentEmployeeId = e.target.value; render();
+  });
+}
+
+/* ============================ Tab: Mitarbeiter ============================ */
+function renderMitarbeiter(){
+  const c = document.getElementById('content');
+  const editing = editingEmployeeId ? employees.find(e=>e.id===editingEmployeeId) : null;
+
+  c.innerHTML = `
+    <div class="card">
+      <h3>${editing?'Mitarbeiter bearbeiten':'Neuer Mitarbeiter'}</h3>
+      <p class="hint">Name sowie Start- und ggf. Enddatum des Arbeitsverhältnisses.</p>
+      <div class="row">
+        <div class="field">
+          <label for="fName">Name</label>
+          <input type="text" id="fName" placeholder="Vor- und Nachname" value="${editing?esc(editing.name):''}">
+        </div>
+        <div class="field">
+          <label for="fStart">Eintrittsdatum</label>
+          <input type="date" id="fStart" value="${editing?editing.startDate||'':''}">
+        </div>
+        <div class="field">
+          <label for="fEnd">Austrittsdatum (optional)</label>
+          <input type="date" id="fEnd" value="${editing&&editing.endDate?editing.endDate:''}">
+        </div>
+        <div class="field">
+          <button class="btn accent" id="saveEmp">${editing?'Speichern':'Anlegen'}</button>
+        </div>
+        ${editing?'<div class="field"><button class="btn secondary" id="cancelEditEmp">Abbrechen</button></div>':''}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Alle Mitarbeiter</h3>
+      ${employees.length? renderEmployeeTable() : `<div class="empty">Noch keine Mitarbeiter angelegt.</div>`}
+    </div>
+  `;
+
+  document.getElementById('saveEmp').addEventListener('click', async ()=>{
+    const name = document.getElementById('fName').value.trim();
+    const start = document.getElementById('fStart').value;
+    const end = document.getElementById('fEnd').value;
+    if(!name){ toast('Bitte einen Namen angeben.'); return; }
+    if(!start){ toast('Bitte ein Eintrittsdatum angeben.'); return; }
+    if(end && end < start){ toast('Austrittsdatum liegt vor dem Eintrittsdatum.'); return; }
+    const payload = { name, startDate: start, endDate: end || null };
+    try{
+      if(editing){
+        await db.collection('employees').doc(editing.id).update(payload);
+        toast('Mitarbeiter aktualisiert.');
+        editingEmployeeId = null;
+      }else{
+        const ref = await db.collection('employees').add(payload);
+        currentEmployeeId = ref.id;
+        toast('Mitarbeiter angelegt.');
+      }
+    }catch(err){ toast('Speichern fehlgeschlagen.'); }
+  });
+
+  const cancelBtn = document.getElementById('cancelEditEmp');
+  if(cancelBtn){ cancelBtn.addEventListener('click', ()=>{ editingEmployeeId=null; render(); }); }
+
+  c.querySelectorAll('[data-edit-emp]').forEach(b=>{
+    b.addEventListener('click', ()=>{ editingEmployeeId = b.dataset.editEmp; render(); });
+  });
+  c.querySelectorAll('[data-del-emp]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const id = b.dataset.delEmp;
+      const emp = employees.find(e=>e.id===id);
+      if(!confirm(`„${emp?emp.name:''}" wirklich löschen? Alle Sollstunden- und Zeiterfassungsdaten dieses Mitarbeiters werden mitgelöscht.`)) return;
+      try{
+        await db.collection('employees').doc(id).delete();
+        if(currentEmployeeId===id) currentEmployeeId=null;
+        toast('Mitarbeiter gelöscht.');
+      }catch(err){ toast('Löschen fehlgeschlagen.'); }
+    });
+  });
+}
+
+function renderEmployeeTable(){
+  return `
+    <table>
+      <thead><tr><th>Name</th><th>Eintritt</th><th>Austritt</th><th></th></tr></thead>
+      <tbody>
+        ${employees.map(e=>`
+          <tr>
+            <td>${esc(e.name)}</td>
+            <td class="num">${e.startDate||'—'}</td>
+            <td class="num">${e.endDate?e.endDate:'<span class="pill ok">aktiv</span>'}</td>
+            <td style="text-align:right;">
+              <button class="linkbtn" data-edit-emp="${e.id}">Bearbeiten</button>
+              &nbsp;·&nbsp;
+              <button class="linkbtn" data-del-emp="${e.id}">Löschen</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+/* ============================ Tab: Sollstunden ============================ */
+function renderSollstunden(){
+  const c = document.getElementById('content');
+  if(!currentEmployeeId){ c.innerHTML = `<div class="empty">Bitte zuerst unter „Mitarbeiter" einen Mitarbeiter anlegen und auswählen.</div>`; return; }
+
+  const empTargets = targets.filter(t=>t.employeeId===currentEmployeeId).sort((a,b)=> b.month.localeCompare(a.month));
+
+  c.innerHTML = `
+    <div class="card">
+      <h3>Sollstunden festlegen</h3>
+      <p class="hint">Die Soll-Arbeitsstunden sind pro Monat variabel und können hier jederzeit angepasst werden.</p>
+      <div class="row">
+        <div class="field">
+          <label for="fMonth">Monat</label>
+          <input type="month" id="fMonth" value="${todayMonth()}">
+        </div>
+        <div class="field">
+          <label for="fHours">Sollstunden</label>
+          <input type="number" id="fHours" min="0" step="0.5" style="width:110px;" placeholder="z. B. 160">
+        </div>
+        <div class="field">
+          <button class="btn accent" id="saveTarget">Speichern</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Hinterlegte Monate</h3>
+      ${empTargets.length? `
+        <table>
+          <thead><tr><th>Monat</th><th class="num">Sollstunden</th><th></th></tr></thead>
+          <tbody>
+            ${empTargets.map(t=>`
+              <tr>
+                <td>${monthLabel(t.month)}</td>
+                <td class="num">${fmtHours(t.hours)} h</td>
+                <td style="text-align:right;"><button class="linkbtn" data-del-target="${t.id}">Löschen</button></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>` : `<div class="empty">Für diesen Mitarbeiter sind noch keine Sollstunden hinterlegt.</div>`}
+    </div>
+  `;
+
+  document.getElementById('saveTarget').addEventListener('click', async ()=>{
+    const month = document.getElementById('fMonth').value;
+    const hoursVal = document.getElementById('fHours').value;
+    if(!month){ toast('Bitte einen Monat wählen.'); return; }
+    if(hoursVal===''||isNaN(Number(hoursVal))||Number(hoursVal)<0){ toast('Bitte eine gültige Stundenzahl angeben.'); return; }
+    const id = `${currentEmployeeId}_${month}`;
+    try{
+      await db.collection('targets').doc(id).set({ employeeId: currentEmployeeId, month, hours: Number(hoursVal) });
+      toast('Sollstunden gespeichert.');
+    }catch(err){ toast('Speichern fehlgeschlagen.'); }
+  });
+
+  c.querySelectorAll('[data-del-target]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      if(!confirm('Diesen Monat wirklich löschen?')) return;
+      try{ await db.collection('targets').doc(b.dataset.delTarget).delete(); toast('Gelöscht.'); }
+      catch(err){ toast('Löschen fehlgeschlagen.'); }
+    });
+  });
+}
+
+function monthLabel(m){ const [y,mm]=m.split('-'); return `${MONTHS[Number(mm)-1]} ${y}`; }
+
+/* ============================ Tab: Zeiterfassung ============================ */
+function getMonday(dateStr){
+  const d = parseDate(dateStr);
+  const idx = weekdayIdx(dateStr); // 0=Mo
+  d.setDate(d.getDate()-idx);
+  return d;
+}
+
+function renderZeiterfassung(){
+  const c = document.getElementById('content');
+  if(!currentEmployeeId){ c.innerHTML = `<div class="empty">Bitte zuerst unter „Mitarbeiter" einen Mitarbeiter anlegen und auswählen.</div>`; return; }
+
+  const monday = getMonday(weekAnchor);
+  const days = [];
+  for(let i=0;i<7;i++){
+    const d = new Date(monday); d.setDate(monday.getDate()+i);
+    days.push(fmtDate(d));
+  }
+  const sunday = days[6];
+  const wkNum = isoWeekNumber(monday);
+
+  const empEntries = {};
+  entries.filter(en=>en.employeeId===currentEmployeeId).forEach(en=>{ empEntries[en.date]=en; });
+
+  let weekTotal = 0;
+  days.forEach(d=>{ const en=empEntries[d]; if(en&&en.hours) weekTotal+=en.hours; });
+
+  c.innerHTML = `
+    <div class="weekbar no-print">
+      <button class="btn secondary small" id="prevWeek">← Vorwoche</button>
+      <span class="lbl">KW ${wkNum} · ${formatShort(days[0])} – ${formatShort(days[6])}</span>
+      <button class="btn secondary small" id="nextWeek">Folgewoche →</button>
+      <input type="date" id="jumpDate" value="${weekAnchor}" style="margin-left:auto;">
+    </div>
+
+    <div class="card">
+      <h3>Erfasste Tage</h3>
+      <p class="hint">Anfangs- und Endzeit pro Tag eintragen. Leere Zeilen gelten als nicht gearbeitet.</p>
+      <table>
+        <thead>
+          <tr><th>Tag</th><th>Datum</th><th>Von</th><th>Bis</th><th class="num">Stunden</th><th>Bemerkung</th></tr>
+        </thead>
+        <tbody>
+          ${days.map((d,i)=>{
+            const en = empEntries[d];
+            const isWeekend = i>=5;
+            const isToday = d===todayStr();
+            return `
+            <tr class="${isWeekend?'weekend':''} ${isToday?'today':''}" data-day="${d}">
+              <td>${WEEKDAYS[i]}</td>
+              <td class="num">${formatShort(d)}</td>
+              <td><input type="time" class="tStart" value="${en&&en.start?en.start:''}"></td>
+              <td><input type="time" class="tEnd" value="${en&&en.end?en.end:''}"></td>
+              <td class="num hoursCell">${en&&en.hours?fmtHours(en.hours):'—'}</td>
+              <td><input type="text" class="tNote" placeholder="optional" value="${en&&en.note?esc(en.note):''}" style="width:100%;"></td>
+            </tr>`;
+          }).join('')}
+          <tr class="total"><td colspan="4">Wochensumme</td><td class="num" id="weekTotalCell">${fmtHours(weekTotal)} h</td><td></td></tr>
+        </tbody>
+      </table>
+      <div class="row" style="margin-top:16px;">
+        <button class="btn accent" id="saveWeek">Woche speichern</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('prevWeek').addEventListener('click', ()=>{
+    const d=parseDate(weekAnchor); d.setDate(d.getDate()-7); weekAnchor=fmtDate(d); render();
+  });
+  document.getElementById('nextWeek').addEventListener('click', ()=>{
+    const d=parseDate(weekAnchor); d.setDate(d.getDate()+7); weekAnchor=fmtDate(d); render();
+  });
+  document.getElementById('jumpDate').addEventListener('change', e=>{
+    if(e.target.value){ weekAnchor=e.target.value; render(); }
+  });
+
+  // live hour preview per row
+  c.querySelectorAll('tbody tr[data-day]').forEach(tr=>{
+    const upd = ()=>{
+      const s=tr.querySelector('.tStart').value, en=tr.querySelector('.tEnd').value;
+      const h=calcHours(s,en);
+      tr.querySelector('.hoursCell').textContent = h!=null?fmtHours(h)+' h':(s||en?'ungültig':'—');
+      let tot=0;
+      c.querySelectorAll('tbody tr[data-day]').forEach(r=>{
+        const hh=calcHours(r.querySelector('.tStart').value, r.querySelector('.tEnd').value);
+        if(hh) tot+=hh;
+      });
+      document.getElementById('weekTotalCell').textContent = fmtHours(tot)+' h';
+    };
+    tr.querySelector('.tStart').addEventListener('input', upd);
+    tr.querySelector('.tEnd').addEventListener('input', upd);
+  });
+
+  document.getElementById('saveWeek').addEventListener('click', async ()=>{
+    const rows = Array.from(c.querySelectorAll('tbody tr[data-day]'));
+    let hadInvalid=false;
+    try{
+      for(const tr of rows){
+        const date = tr.dataset.day;
+        const start = tr.querySelector('.tStart').value;
+        const end = tr.querySelector('.tEnd').value;
+        const note = tr.querySelector('.tNote').value.trim();
+        const id = `${currentEmployeeId}_${date}`;
+        if(!start && !end){
+          if(empEntries[date]){ await db.collection('entries').doc(id).delete(); }
+          continue;
+        }
+        const hours = calcHours(start,end);
+        if(hours==null){ hadInvalid=true; continue; }
+        await db.collection('entries').doc(id).set({ employeeId: currentEmployeeId, date, start, end, hours, note: note||null });
+      }
+      toast(hadInvalid? 'Gespeichert – ungültige Zeilen (Ende vor Beginn) wurden übersprungen.' : 'Woche gespeichert.');
+    }catch(err){ toast('Speichern fehlgeschlagen.'); }
+  });
+}
+
+function formatShort(dateStr){
+  const d=parseDate(dateStr);
+  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+}
+function isoWeekNumber(monday){
+  const d = new Date(Date.UTC(monday.getFullYear(), monday.getMonth(), monday.getDate()));
+  const dayNum = (d.getUTCDay()+6)%7;
+  d.setUTCDate(d.getUTCDate()-dayNum+3);
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(),0,4));
+  const diff = d - firstThursday;
+  return 1 + Math.round(diff/(7*24*3600*1000));
+}
+
+/* ============================ Tab: Monatsübersicht ============================ */
+function renderMonat(){
+  const c = document.getElementById('content');
+  if(!currentEmployeeId){ c.innerHTML = `<div class="empty">Bitte zuerst unter „Mitarbeiter" einen Mitarbeiter anlegen und auswählen.</div>`; return; }
+
+  const emp = currentEmployee();
+  const [y,m] = monthPick.split('-').map(Number);
+  const empEntries = entries.filter(en=>en.employeeId===currentEmployeeId && en.date.startsWith(monthPick)).sort((a,b)=>a.date.localeCompare(b.date));
+  const total = empEntries.reduce((s,en)=>s+(en.hours||0),0);
+  const targetDoc = targets.find(t=>t.employeeId===currentEmployeeId && t.month===monthPick);
+  const soll = targetDoc?targetDoc.hours:null;
+  const diff = soll!=null? total-soll : null;
+
+  c.innerHTML = `
+    <div class="row no-print" style="margin-bottom:18px;">
+      <div class="field">
+        <label for="mMonth">Monat</label>
+        <input type="month" id="mMonth" value="${monthPick}">
+      </div>
+      <div class="field">
+        <button class="btn secondary" id="printMonth">Als PDF drucken</button>
+      </div>
+    </div>
+
+    <div class="printable">
+      <div class="print-head">
+        <h1>Monatsnachweis – ${monthLabel(monthPick)}</h1>
+        <div class="meta">Mitarbeiter: ${esc(emp?emp.name:'')} · Erstellt am ${formatShort(todayStr())}</div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="label">Ist-Stunden</div><div class="value">${fmtHours(total)} h</div></div>
+        <div class="stat"><div class="label">Sollstunden</div><div class="value">${soll!=null?fmtHours(soll)+' h':'—'}</div></div>
+        <div class="stat"><div class="label">Differenz</div><div class="value ${diff==null?'':(diff>=0?'ok':'bad')}">${diff==null?'—':(diff>=0?'+':'')+fmtHours(diff)+' h'}</div></div>
+      </div>
+
+      <div class="card">
+        <h3>Tageserfassung ${monthLabel(monthPick)}</h3>
+        ${empEntries.length? `
+        <table>
+          <thead><tr><th>Datum</th><th>Wochentag</th><th>Von</th><th>Bis</th><th class="num">Stunden</th><th>Bemerkung</th></tr></thead>
+          <tbody>
+            ${empEntries.map(en=>`
+              <tr>
+                <td class="num">${formatShort(en.date)}</td>
+                <td>${WEEKDAYS[weekdayIdx(en.date)]}</td>
+                <td>${fmtTimeShort(en.start)}</td>
+                <td>${fmtTimeShort(en.end)}</td>
+                <td class="num">${fmtHours(en.hours)} h</td>
+                <td>${esc(en.note||'')}</td>
+              </tr>`).join('')}
+            <tr class="total"><td colspan="4">Summe</td><td class="num">${fmtHours(total)} h</td><td></td></tr>
+          </tbody>
+        </table>` : `<div class="empty">Für diesen Monat wurden keine Zeiten erfasst.</div>`}
+      </div>
+
+      <div class="sign" style="display:none;">
+        <div class="line">Ort, Datum</div>
+        <div class="line">Unterschrift Mitarbeiter/in</div>
+      </div>
+    </div>
+  `;
+
+  // signature block only meaningful for print — show it there
+  c.querySelector('.sign').style.display='';
+  c.querySelector('.sign').classList.add('no-screen-sign');
+
+  document.getElementById('mMonth').addEventListener('change', e=>{
+    if(e.target.value){ monthPick=e.target.value; render(); }
+  });
+  document.getElementById('printMonth').addEventListener('click', ()=> window.print());
+}
+
+/* ============================ Tab: Jahresübersicht ============================ */
+function renderJahr(){
+  const c = document.getElementById('content');
+  if(!currentEmployeeId){ c.innerHTML = `<div class="empty">Bitte zuerst unter „Mitarbeiter" einen Mitarbeiter anlegen und auswählen.</div>`; return; }
+
+  const emp = currentEmployee();
+  const today = new Date();
+  const todayY = today.getFullYear(), todayM = today.getMonth()+1, todayD = today.getDate();
+  const isCurrentYear = yearPick===todayY;
+  const lastMonth = yearPick>todayY? 0 : (yearPick<todayY? 12 : todayM);
+
+  let rows = [];
+  let sollSum=0, istSum=0;
+  for(let mo=1; mo<=lastMonth; mo++){
+    const key = `${yearPick}-${String(mo).padStart(2,'0')}`;
+    const tdoc = targets.find(t=>t.employeeId===currentEmployeeId && t.month===key);
+    const fullTarget = tdoc?tdoc.hours:0;
+    const isCurrentMonth = isCurrentYear && mo===todayM;
+    let sollMonth = fullTarget;
+    if(isCurrentMonth){
+      const dim = daysInMonth(yearPick,mo);
+      sollMonth = fullTarget * (todayD/dim);
+    }
+    const istMonth = entries
+      .filter(en=>en.employeeId===currentEmployeeId && en.date.startsWith(key))
+      .reduce((s,en)=>s+(en.hours||0),0);
+    sollSum += sollMonth;
+    istSum += istMonth;
+    rows.push({mo, key, soll:sollMonth, sollFull:fullTarget, ist:istMonth, prorated:isCurrentMonth});
+  }
+  const gut = istSum - sollSum;
+
+  c.innerHTML = `
+    <div class="row no-print" style="margin-bottom:18px;">
+      <div class="field">
+        <label for="yYear">Jahr</label>
+        <select id="yYear">
+          ${yearOptions()}
+        </select>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="label">Sollstunden bis heute</div><div class="value">${fmtHours(sollSum)} h</div></div>
+      <div class="stat"><div class="label">Iststunden bis heute</div><div class="value">${fmtHours(istSum)} h</div></div>
+      <div class="stat"><div class="label">Gutstunden</div><div class="value ${gut>=0?'ok':'bad'}">${gut>=0?'+':''}${fmtHours(gut)} h</div></div>
+    </div>
+
+    <div class="card">
+      <h3>${emp?esc(emp.name):''} · ${yearPick}</h3>
+      <p class="hint">${isCurrentYear? 'Der laufende Monat wird anteilig nach Kalendertagen bis heute berücksichtigt.' : 'Vollständiges Jahr.'}</p>
+      ${lastMonth>0? `
+      <table>
+        <thead><tr><th>Monat</th><th class="num">Soll</th><th class="num">Ist</th><th class="num">Differenz</th></tr></thead>
+        <tbody>
+          ${rows.map(r=>{
+            const d = r.ist - r.soll;
+            return `<tr>
+              <td>${MONTHS[r.mo-1]}${r.prorated?' <span class="pill neutral">anteilig</span>':''}</td>
+              <td class="num">${fmtHours(r.soll)} h</td>
+              <td class="num">${fmtHours(r.ist)} h</td>
+              <td class="num"><span class="pill ${d>=0?'ok':'bad'}">${d>=0?'+':''}${fmtHours(d)} h</span></td>
+            </tr>`;
+          }).join('')}
+          <tr class="total"><td>Summe</td><td class="num">${fmtHours(sollSum)} h</td><td class="num">${fmtHours(istSum)} h</td><td class="num">${gut>=0?'+':''}${fmtHours(gut)} h</td></tr>
+        </tbody>
+      </table>` : `<div class="empty">Für dieses Jahr liegen noch keine Daten vor.</div>`}
+    </div>
+  `;
+
+  document.getElementById('yYear').addEventListener('change', e=>{
+    yearPick = Number(e.target.value); render();
+  });
+}
+
+/* ============================ Tab: Alle Mitarbeiter (Gesamtübersicht) ============================ */
+function computeSaldoForEmployee(empId, stichtagStr){
+  const [sy,sm,sd] = stichtagStr.split('-').map(Number);
+  let soll=0, ist=0;
+  for(let mo=1; mo<sm; mo++){
+    const key = `${sy}-${String(mo).padStart(2,'0')}`;
+    const tdoc = targets.find(t=>t.employeeId===empId && t.month===key);
+    soll += tdoc?tdoc.hours:0;
+    ist += entries.filter(en=>en.employeeId===empId && en.date.startsWith(key)).reduce((s,en)=>s+(en.hours||0),0);
+  }
+  const key = `${sy}-${String(sm).padStart(2,'0')}`;
+  const tdoc = targets.find(t=>t.employeeId===empId && t.month===key);
+  const fullTarget = tdoc?tdoc.hours:0;
+  const dim = daysInMonth(sy,sm);
+  soll += fullTarget*(sd/dim);
+  ist += entries.filter(en=>en.employeeId===empId && en.date.startsWith(key) && en.date<=stichtagStr).reduce((s,en)=>s+(en.hours||0),0);
+  return {soll, ist, saldo: ist-soll};
+}
+
+function renderGesamt(){
+  const c = document.getElementById('content');
+  if(!employees.length){ c.innerHTML = `<div class="empty">Noch keine Mitarbeiter angelegt.</div>`; return; }
+
+  const [sy] = stichtag.split('-').map(Number);
+  const rows = employees.map(e=>{
+    const r = computeSaldoForEmployee(e.id, stichtag);
+    const activeAtStichtag = (!e.endDate || e.endDate>=stichtag) && (!e.startDate || e.startDate<=stichtag);
+    return {emp:e, ...r, activeAtStichtag};
+  });
+  const sollSum = rows.reduce((s,r)=>s+r.soll,0);
+  const istSum = rows.reduce((s,r)=>s+r.ist,0);
+  const gutSum = istSum - sollSum;
+
+  c.innerHTML = `
+    <div class="row no-print" style="margin-bottom:18px;">
+      <div class="field">
+        <label for="gStichtag">Stichtag</label>
+        <input type="date" id="gStichtag" value="${stichtag}">
+      </div>
+      <div class="field">
+        <button class="btn secondary" id="printGesamt">Als PDF drucken</button>
+      </div>
+    </div>
+
+    <div class="printable">
+      <div class="print-head">
+        <h1>Jahresübersicht aller Mitarbeiter</h1>
+        <div class="meta">Stichtag: ${formatShort(stichtag)} · Kalenderjahr ${sy} · Erstellt am ${formatShort(todayStr())}</div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="label">Sollstunden gesamt</div><div class="value">${fmtHours(sollSum)} h</div></div>
+        <div class="stat"><div class="label">Iststunden gesamt</div><div class="value">${fmtHours(istSum)} h</div></div>
+        <div class="stat"><div class="label">Gutstunden gesamt</div><div class="value ${gutSum>=0?'ok':'bad'}">${gutSum>=0?'+':''}${fmtHours(gutSum)} h</div></div>
+      </div>
+
+      <div class="card">
+        <h3>Salden je Mitarbeiter</h3>
+        <p class="hint">Soll- und Iststunden von Jahresbeginn ${sy} bis zum ${formatShort(stichtag)}, laufender Monat anteilig nach Kalendertagen.</p>
+        <table>
+          <thead><tr><th>Mitarbeiter</th><th>Status</th><th class="num">Soll</th><th class="num">Ist</th><th class="num">Saldo</th></tr></thead>
+          <tbody>
+            ${rows.map(r=>`
+              <tr>
+                <td>${esc(r.emp.name)}</td>
+                <td>${r.activeAtStichtag? '<span class="pill ok">aktiv</span>' : `<span class="pill neutral">${r.emp.endDate?'ausgetreten '+formatShort(r.emp.endDate):'noch nicht eingetreten'}</span>`}</td>
+                <td class="num">${fmtHours(r.soll)} h</td>
+                <td class="num">${fmtHours(r.ist)} h</td>
+                <td class="num"><span class="pill ${r.saldo>=0?'ok':'bad'}">${r.saldo>=0?'+':''}${fmtHours(r.saldo)} h</span></td>
+              </tr>`).join('')}
+            <tr class="total"><td colspan="2">Summe</td><td class="num">${fmtHours(sollSum)} h</td><td class="num">${fmtHours(istSum)} h</td><td class="num">${gutSum>=0?'+':''}${fmtHours(gutSum)} h</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('gStichtag').addEventListener('change', e=>{
+    if(e.target.value){ stichtag=e.target.value; render(); }
+  });
+  document.getElementById('printGesamt').addEventListener('click', ()=> window.print());
+}
+
+function yearOptions(){
+  const now = new Date().getFullYear();
+  let opts=[];
+  for(let y=now-3;y<=now+1;y++){
+    opts.push(`<option value="${y}" ${y===yearPick?'selected':''}>${y}</option>`);
+  }
+  return opts.join('');
+}
+</script>
+</body>
+</html>
