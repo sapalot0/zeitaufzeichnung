@@ -549,7 +549,8 @@ function renderSetupScreen(msg){
           </div>
           <div class="field" style="flex:1;">
             <label for="setSpFolder">Ordner in der Bibliothek</label>
-            <input type="text" id="setSpFolder" value="${esc(savedFolder)}" style="width:100%;">
+            <input type="text" id="setSpFolder" placeholder="z. B. Verwaltung/Zeiterfassung" value="${esc(savedFolder)}" style="width:100%;">
+            <p class="hint" style="margin:4px 0 0;">Auch verschachtelte Unterordner möglich, z. B. „Verwaltung/Zeiterfassung" — wird beim ersten Start automatisch angelegt.</p>
           </div>
         </div>
       </div>
@@ -680,22 +681,34 @@ async function graphFetch(path, options){
 }
 
 function encodeGraphSegment(s){ return encodeURIComponent(s).replace(/%20/g,' '); }
+function encodeGraphPath(path){ return path.split('/').map(s=>s.trim()).filter(Boolean).map(encodeGraphSegment).join('/'); }
 
-async function ensureFolder(driveId, name){
-  const checkRes = await graphFetch(`/drives/${driveId}/root:/${encodeGraphSegment(name)}`);
-  if(!checkRes) return false;
-  if(checkRes.status===404){
-    const createRes = await graphFetch(`/drives/${driveId}/root/children`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ name, folder:{}, '@microsoft.graph.conflictBehavior':'fail' }),
-    });
-    if(!createRes) return false;
-    if(!createRes.ok && createRes.status!==409){
-      throw new Error('Der Ordner konnte in der Bibliothek nicht angelegt werden. Prüfe, ob das Konto Schreibrechte auf der Site hat.');
+/* Stellt sicher, dass ein (ggf. mehrstufiger) Ordnerpfad wie "Verwaltung/Zeiterfassung"
+   in der Bibliothek existiert, und legt fehlende Zwischenordner automatisch an. */
+async function ensureFolderPath(driveId, path){
+  const segments = path.split('/').map(s=>s.trim()).filter(Boolean);
+  let currentPath = '';
+  for(const seg of segments){
+    const parentPath = currentPath;
+    currentPath = currentPath ? `${currentPath}/${seg}` : seg;
+    const checkRes = await graphFetch(`/drives/${driveId}/root:/${encodeGraphPath(currentPath)}`);
+    if(!checkRes) return false;
+    if(checkRes.status===404){
+      const childrenUrl = parentPath
+        ? `/drives/${driveId}/root:/${encodeGraphPath(parentPath)}:/children`
+        : `/drives/${driveId}/root/children`;
+      const createRes = await graphFetch(childrenUrl, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ name: seg, folder:{}, '@microsoft.graph.conflictBehavior':'fail' }),
+      });
+      if(!createRes) return false;
+      if(!createRes.ok && createRes.status!==409){
+        throw new Error(`Der Ordner „${seg}" konnte nicht angelegt werden. Prüfe, ob das Konto Schreibrechte auf der Bibliothek hat.`);
+      }
+    } else if(!checkRes.ok){
+      throw new Error(`Zugriff auf den Ordner „${currentPath}" fehlgeschlagen (HTTP ${checkRes.status}).`);
     }
-  } else if(!checkRes.ok){
-    throw new Error(`Zugriff auf die Bibliothek fehlgeschlagen (HTTP ${checkRes.status}).`);
   }
   return true;
 }
@@ -739,9 +752,9 @@ async function resolveStorageTarget(){
   }
 
   if(folderName){
-    const ok = await ensureFolder(driveId, folderName);
+    const ok = await ensureFolderPath(driveId, folderName);
     if(!ok) return false;
-    dataFileGraphPath = `/drives/${driveId}/root:/${encodeGraphSegment(folderName)}/${DATA_FILE_PATH}`;
+    dataFileGraphPath = `/drives/${driveId}/root:/${encodeGraphPath(folderName)}/${DATA_FILE_PATH}`;
   } else {
     dataFileGraphPath = `/drives/${driveId}/root:/${DATA_FILE_PATH}`;
   }
@@ -1637,7 +1650,8 @@ function renderEinstellungen(){
           </div>
           <div class="field" style="flex:1;">
             <label for="setSpFolder2">Ordner in der Bibliothek</label>
-            <input type="text" id="setSpFolder2" value="${esc(spFolder)}" style="width:100%;">
+            <input type="text" id="setSpFolder2" placeholder="z. B. Verwaltung/Zeiterfassung" value="${esc(spFolder)}" style="width:100%;">
+            <p class="hint" style="margin:4px 0 0;">Auch verschachtelte Unterordner möglich, z. B. „Verwaltung/Zeiterfassung".</p>
           </div>
         </div>
       </div>
