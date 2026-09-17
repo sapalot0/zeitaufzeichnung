@@ -1403,7 +1403,7 @@ function renderZeiterfassung(){
 
 function formatShort(dateStr){
   const d=parseDate(dateStr);
-  return `${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}.${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
 }
 function isoWeekNumber(monday){
   const d = new Date(Date.UTC(monday.getFullYear(), monday.getMonth(), monday.getDate()));
