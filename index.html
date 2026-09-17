@@ -1066,8 +1066,8 @@ function renderEmployeeTable(){
         ${employees.map(e=>`
           <tr>
             <td>${esc(e.name)}</td>
-            <td class="num">${e.startDate||'—'}</td>
-            <td class="num">${e.endDate?e.endDate:'<span class="pill ok">aktiv</span>'}</td>
+            <td class="num">${e.startDate?formatShort(e.startDate):'—'}</td>
+            <td class="num">${e.endDate?formatShort(e.endDate):'<span class="pill ok">aktiv</span>'}</td>
             <td style="text-align:right;">
               <button class="linkbtn" data-edit-emp="${e.id}">Bearbeiten</button>
               &nbsp;·&nbsp;
@@ -1262,7 +1262,7 @@ function renderZeiterfassung(){
 
 function formatShort(dateStr){
   const d=parseDate(dateStr);
-  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+  return `${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}.${d.getFullYear()}`;
 }
 function isoWeekNumber(monday){
   const d = new Date(Date.UTC(monday.getFullYear(), monday.getMonth(), monday.getDate()));
