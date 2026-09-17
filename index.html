@@ -428,6 +428,9 @@ function todayStr(){ return fmtDate(new Date()); }
 function parseDate(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
 function weekdayIdx(dateStr){ const d=parseDate(dateStr); const wd=d.getDay(); return wd===0?6:wd-1; }
 function daysInMonth(y,m){ return new Date(y,m,0).getDate(); }
+/* Sollstunden werden als Wochenstunden erfasst und gelten für den ganzen Monat gleich.
+   Rechnet auf Basis eines Tagessatzes (Wochenstunden/7) auf den vollen Monat hoch. */
+function weeklyToMonthly(weeklyHours, y, m){ return (weeklyHours/7) * daysInMonth(y,m); }
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function fmtHours(h){ return (Math.round((h||0)*100)/100).toFixed(2).replace('.',','); }
 function fmtTimeShort(s){ return s || '—'; }
@@ -941,7 +944,7 @@ function render(){
   };
   const titles = {
     mitarbeiter: ['Mitarbeiter','Stammdaten anlegen und pflegen'],
-    sollstunden: ['Sollstunden','Monatliche Soll-Arbeitsstunden je Mitarbeiter'],
+    sollstunden: ['Sollstunden','Wöchentliche Soll-Arbeitsstunden je Mitarbeiter'],
     zeiterfassung: ['Zeiterfassung','Geleistete Stunden je Kalenderwoche erfassen'],
     monat: ['Monatsübersicht','Alle Tage eines Monats, druckbar zur Bestätigung'],
     jahr: ['Jahresübersicht','Soll/Ist-Vergleich und Gutstunden im Jahresverlauf'],
@@ -966,7 +969,7 @@ function renderNav(){
 
 function renderEmpSelect(){
   const wrap=document.getElementById('empSelectWrap');
-  if(currentTab==='mitarbeiter' || currentTab==='gesamt' || currentTab==='einstellungen'){ wrap.innerHTML=''; return; }
+  if(currentTab==='mitarbeiter' || currentTab==='gesamt' || currentTab==='einstellungen' || currentTab==='sollstunden'){ wrap.innerHTML=''; return; }
   if(currentTab==='monat' && monatView==='alle'){ wrap.innerHTML=''; return; }
   if(!employees.length){
     wrap.innerHTML = `<span class="sub" style="color:var(--ink-soft);font-size:12px;">Noch kein Mitarbeiter angelegt</span>`;
@@ -1079,67 +1082,86 @@ function renderEmployeeTable(){
 }
 
 /* ============================ Tab: Sollstunden ============================ */
+let sollstundenMonth = todayMonth();
+
 function renderSollstunden(){
   const c = document.getElementById('content');
-  if(!currentEmployeeId){ c.innerHTML = `<div class="empty">Bitte zuerst unter „Mitarbeiter" einen Mitarbeiter anlegen und auswählen.</div>`; return; }
 
-  const empTargets = targets.filter(t=>t.employeeId===currentEmployeeId).sort((a,b)=> b.month.localeCompare(a.month));
+  const [my, mm] = sollstundenMonth.split('-').map(Number);
+  const monthStart = `${sollstundenMonth}-01`;
+  const monthEnd = `${sollstundenMonth}-${String(daysInMonth(my,mm)).padStart(2,'0')}`;
+  const activeEmployees = employees.filter(e=>
+    (!e.startDate || e.startDate<=monthEnd) && (!e.endDate || e.endDate>=monthStart)
+  );
+
+  const rowsHtml = activeEmployees.map(e=>{
+    const tdoc = targets.find(t=>t.employeeId===e.id && t.month===sollstundenMonth);
+    const val = tdoc ? tdoc.hours : '';
+    return `
+      <tr data-emp="${e.id}">
+        <td>${esc(e.name)}</td>
+        <td><input type="number" class="fHoursRow" min="0" step="0.5" style="width:110px;" value="${val}" placeholder="z. B. 40"></td>
+        <td class="num monthlyPreview">${tdoc? fmtHours(weeklyToMonthly(tdoc.hours, my, mm))+' h' : '—'}</td>
+      </tr>`;
+  }).join('');
 
   c.innerHTML = `
     <div class="card">
-      <h3>Sollstunden festlegen</h3>
-      <p class="hint">Die Soll-Arbeitsstunden sind pro Monat variabel und können hier jederzeit angepasst werden.</p>
-      <div class="row">
-        <div class="field">
-          <label for="fMonth">Monat</label>
-          <input type="month" id="fMonth" value="${todayMonth()}">
-        </div>
-        <div class="field">
-          <label for="fHours">Sollstunden</label>
-          <input type="number" id="fHours" min="0" step="0.5" style="width:110px;" placeholder="z. B. 160">
-        </div>
-        <div class="field">
-          <button class="btn accent" id="saveTarget">Speichern</button>
-        </div>
+      <h3>Wochenstunden festlegen</h3>
+      <p class="hint">Die Sollstunden werden als Wochenstunden erfasst und gelten für den ganzen Monat gleich. Zwischen den Monaten kannst du oben umschalten; leere Felder werden nicht gespeichert.</p>
+      <div class="field" style="margin-bottom:16px;max-width:220px;">
+        <label for="fMonth">Monat</label>
+        <input type="month" id="fMonth" value="${sollstundenMonth}">
       </div>
-    </div>
-
-    <div class="card">
-      <h3>Hinterlegte Monate</h3>
-      ${empTargets.length? `
-        <table>
-          <thead><tr><th>Monat</th><th class="num">Sollstunden</th><th></th></tr></thead>
-          <tbody>
-            ${empTargets.map(t=>`
-              <tr>
-                <td>${monthLabel(t.month)}</td>
-                <td class="num">${fmtHours(t.hours)} h</td>
-                <td style="text-align:right;"><button class="linkbtn" data-del-target="${t.id}">Löschen</button></td>
-              </tr>`).join('')}
-          </tbody>
-        </table>` : `<div class="empty">Für diesen Mitarbeiter sind noch keine Sollstunden hinterlegt.</div>`}
+      ${activeEmployees.length? `
+      <table>
+        <thead><tr><th>Mitarbeiter</th><th>Wochenstunden</th><th class="num">≈ Monatsstunden</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <div class="row" style="margin-top:16px;">
+        <button class="btn accent" id="saveAllTargets">Speichern</button>
+      </div>
+      ` : `<div class="empty">Für ${monthLabel(sollstundenMonth)} sind keine aktiven Mitarbeiter vorhanden.</div>`}
     </div>
   `;
 
-  document.getElementById('saveTarget').addEventListener('click', async ()=>{
-    const month = document.getElementById('fMonth').value;
-    const hoursVal = document.getElementById('fHours').value;
-    if(!month){ toast('Bitte einen Monat wählen.'); return; }
-    if(hoursVal===''||isNaN(Number(hoursVal))||Number(hoursVal)<0){ toast('Bitte eine gültige Stundenzahl angeben.'); return; }
-    const id = `${currentEmployeeId}_${month}`;
-    try{
-      await db.collection('targets').doc(id).set({ employeeId: currentEmployeeId, month, hours: Number(hoursVal) });
-      toast('Sollstunden gespeichert.');
-    }catch(err){ toast('Speichern fehlgeschlagen.'); }
+  document.getElementById('fMonth').addEventListener('change', e=>{
+    if(e.target.value){ sollstundenMonth = e.target.value; render(); }
   });
 
-  c.querySelectorAll('[data-del-target]').forEach(b=>{
-    b.addEventListener('click', async ()=>{
-      if(!confirm('Diesen Monat wirklich löschen?')) return;
-      try{ await db.collection('targets').doc(b.dataset.delTarget).delete(); toast('Gelöscht.'); }
-      catch(err){ toast('Löschen fehlgeschlagen.'); }
+  // Live-Vorschau der Monatsstunden beim Tippen
+  c.querySelectorAll('tbody tr[data-emp]').forEach(tr=>{
+    const input = tr.querySelector('.fHoursRow');
+    input.addEventListener('input', ()=>{
+      const v = Number(input.value);
+      const preview = tr.querySelector('.monthlyPreview');
+      preview.textContent = (input.value!=='' && !isNaN(v) && v>=0) ? fmtHours(weeklyToMonthly(v, my, mm))+' h' : '—';
     });
   });
+
+  const saveBtn = document.getElementById('saveAllTargets');
+  if(saveBtn){
+    saveBtn.addEventListener('click', async ()=>{
+      const rows = Array.from(c.querySelectorAll('tbody tr[data-emp]'));
+      let hadInvalid = false;
+      try{
+        for(const tr of rows){
+          const employeeId = tr.dataset.emp;
+          const raw = tr.querySelector('.fHoursRow').value;
+          const id = `${employeeId}_${sollstundenMonth}`;
+          const existing = targets.find(t=>t.employeeId===employeeId && t.month===sollstundenMonth);
+          if(raw===''){
+            if(existing){ await db.collection('targets').doc(id).delete(); }
+            continue;
+          }
+          const val = Number(raw);
+          if(isNaN(val) || val<0){ hadInvalid = true; continue; }
+          await db.collection('targets').doc(id).set({ employeeId, month: sollstundenMonth, hours: val });
+        }
+        toast(hadInvalid? 'Gespeichert – ungültige Werte wurden übersprungen.' : 'Wochenstunden gespeichert.');
+      }catch(err){ toast('Speichern fehlgeschlagen.'); }
+    });
+  }
 }
 
 function monthLabel(m){ const [y,mm]=m.split('-'); return `${MONTHS[Number(mm)-1]} ${y}`; }
@@ -1316,8 +1338,9 @@ function renderMonatEinzeln(c, viewToggle){
   const emp = currentEmployee();
   const empEntries = entries.filter(en=>en.employeeId===currentEmployeeId && en.date.startsWith(monthPick)).sort((a,b)=>a.date.localeCompare(b.date));
   const total = empEntries.reduce((s,en)=>s+(en.hours||0),0);
+  const [mY,mM] = monthPick.split('-').map(Number);
   const targetDoc = targets.find(t=>t.employeeId===currentEmployeeId && t.month===monthPick);
-  const soll = targetDoc?targetDoc.hours:null;
+  const soll = targetDoc? weeklyToMonthly(targetDoc.hours, mY, mM) : null;
   const diff = soll!=null? total-soll : null;
 
   c.innerHTML = viewToggle + `
@@ -1367,11 +1390,12 @@ function renderMonatEinzeln(c, viewToggle){
 function renderMonatAlle(c, viewToggle){
   if(!employees.length){ c.innerHTML = viewToggle + `<div class="empty">Noch keine Mitarbeiter angelegt.</div>`; return; }
 
+  const [mY,mM] = monthPick.split('-').map(Number);
   const rows = employees.map(emp=>{
     const empEntries = entries.filter(en=>en.employeeId===emp.id && en.date.startsWith(monthPick));
     const ist = empEntries.reduce((s,en)=>s+(en.hours||0),0);
     const targetDoc = targets.find(t=>t.employeeId===emp.id && t.month===monthPick);
-    const soll = targetDoc?targetDoc.hours:null;
+    const soll = targetDoc? weeklyToMonthly(targetDoc.hours, mY, mM) : null;
     const diff = soll!=null? ist-soll : null;
     const tage = empEntries.length;
     return { emp, ist, soll, diff, tage };
@@ -1433,7 +1457,7 @@ function renderJahr(){
   for(let mo=1; mo<=lastMonth; mo++){
     const key = `${yearPick}-${String(mo).padStart(2,'0')}`;
     const tdoc = targets.find(t=>t.employeeId===currentEmployeeId && t.month===key);
-    const fullTarget = tdoc?tdoc.hours:0;
+    const fullTarget = tdoc? weeklyToMonthly(tdoc.hours, yearPick, mo) : 0;
     const isCurrentMonth = isCurrentYear && mo===todayM;
     let sollMonth = fullTarget;
     if(isCurrentMonth){
@@ -1499,12 +1523,12 @@ function computeSaldoForEmployee(empId, stichtagStr){
   for(let mo=1; mo<sm; mo++){
     const key = `${sy}-${String(mo).padStart(2,'0')}`;
     const tdoc = targets.find(t=>t.employeeId===empId && t.month===key);
-    soll += tdoc?tdoc.hours:0;
+    soll += tdoc? weeklyToMonthly(tdoc.hours, sy, mo) : 0;
     ist += entries.filter(en=>en.employeeId===empId && en.date.startsWith(key)).reduce((s,en)=>s+(en.hours||0),0);
   }
   const key = `${sy}-${String(sm).padStart(2,'0')}`;
   const tdoc = targets.find(t=>t.employeeId===empId && t.month===key);
-  const fullTarget = tdoc?tdoc.hours:0;
+  const fullTarget = tdoc? weeklyToMonthly(tdoc.hours, sy, sm) : 0;
   const dim = daysInMonth(sy,sm);
   soll += fullTarget*(sd/dim);
   ist += entries.filter(en=>en.employeeId===empId && en.date.startsWith(key) && en.date<=stichtagStr).reduce((s,en)=>s+(en.hours||0),0);
