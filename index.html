@@ -431,6 +431,11 @@ function daysInMonth(y,m){ return new Date(y,m,0).getDate(); }
 /* Sollstunden werden als Wochenstunden erfasst und gelten für den ganzen Monat gleich.
    Rechnet auf Basis eines Tagessatzes (Wochenstunden/7) auf den vollen Monat hoch. */
 function weeklyToMonthly(weeklyHours, y, m){ return (weeklyHours/7) * daysInMonth(y,m); }
+function prevMonthKey(monthStr){
+  const [y,m] = monthStr.split('-').map(Number);
+  const d = new Date(y, m-2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function fmtHours(h){ return (Math.round((h||0)*100)/100).toFixed(2).replace('.',','); }
 function fmtTimeShort(s){ return s || '—'; }
@@ -1118,7 +1123,8 @@ function renderSollstunden(){
         <thead><tr><th>Mitarbeiter</th><th>Wochenstunden</th><th class="num">≈ Monatsstunden</th></tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
-      <div class="row" style="margin-top:16px;">
+      <div class="row" style="margin-top:16px;gap:8px;">
+        <button class="btn secondary" id="copyPrevMonth">Werte vom Vormonat übernehmen</button>
         <button class="btn accent" id="saveAllTargets">Speichern</button>
       </div>
       ` : `<div class="empty">Für ${monthLabel(sollstundenMonth)} sind keine aktiven Mitarbeiter vorhanden.</div>`}
@@ -1138,6 +1144,26 @@ function renderSollstunden(){
       preview.textContent = (input.value!=='' && !isNaN(v) && v>=0) ? fmtHours(weeklyToMonthly(v, my, mm))+' h' : '—';
     });
   });
+
+  const copyBtn = document.getElementById('copyPrevMonth');
+  if(copyBtn){
+    copyBtn.addEventListener('click', ()=>{
+      const prevKey = prevMonthKey(sollstundenMonth);
+      let copied = 0;
+      c.querySelectorAll('tbody tr[data-emp]').forEach(tr=>{
+        const prevDoc = targets.find(t=>t.employeeId===tr.dataset.emp && t.month===prevKey);
+        if(prevDoc){
+          const input = tr.querySelector('.fHoursRow');
+          input.value = prevDoc.hours;
+          input.dispatchEvent(new Event('input'));
+          copied++;
+        }
+      });
+      toast(copied>0
+        ? `${copied} Wert${copied===1?'':'e'} aus ${monthLabel(prevKey)} übernommen. Bitte prüfen und speichern.`
+        : `Für ${monthLabel(prevKey)} sind keine Wochenstunden hinterlegt.`);
+    });
+  }
 
   const saveBtn = document.getElementById('saveAllTargets');
   if(saveBtn){
