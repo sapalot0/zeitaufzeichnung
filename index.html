@@ -1138,7 +1138,7 @@ function renderSollstunden(){
   c.innerHTML = `
     <div class="card">
       <h3>Wochenstunden festlegen</h3>
-      <p class="hint">Die Sollstunden werden als Wochenstunden erfasst und gelten für den ganzen Monat gleich. Die Arbeitstage/Woche bestimmen den Durchschnittstagsatz, der bei Krankenstand in der Zeiterfassung zu den Ist-Stunden addiert wird. Zwischen den Monaten kannst du oben umschalten; leere Felder werden nicht gespeichert.</p>
+      <p class="hint">Die Sollstunden werden als Wochenstunden erfasst und gelten für den ganzen Monat gleich. Die Arbeitstage/Woche bestimmen den Durchschnittstagsatz, der bei Urlaub und Krankenstand in der Zeiterfassung zu den Ist-Stunden addiert wird. Zwischen den Monaten kannst du oben umschalten; leere Felder werden nicht gespeichert. Werden Wochenstunden oder Arbeitstage/Woche nachträglich geändert, übernehmen bereits erfasste Urlaubs-/Krankenstandstage den neuen Tagessatz erst nach Klick auf „Urlaub/Krankenstand neu berechnen".</p>
       <div class="field" style="margin-bottom:16px;max-width:220px;">
         <label for="fMonth">Monat</label>
         <input type="month" id="fMonth" value="${sollstundenMonth}">
@@ -1150,6 +1150,7 @@ function renderSollstunden(){
       </table>
       <div class="row" style="margin-top:16px;gap:8px;">
         <button class="btn secondary" id="copyPrevMonth">Werte vom Vormonat übernehmen</button>
+        <button class="btn secondary" id="recalcVacSick">Urlaub/Krankenstand neu berechnen</button>
         <button class="btn accent" id="saveAllTargets">Speichern</button>
       </div>
       ` : `<div class="empty">Für ${monthLabel(sollstundenMonth)} sind keine aktiven Mitarbeiter vorhanden.</div>`}
@@ -1195,6 +1196,36 @@ function renderSollstunden(){
       toast(copied>0
         ? `${copied} Wert${copied===1?'':'e'} aus ${monthLabel(prevKey)} übernommen. Bitte prüfen und speichern.`
         : `Für ${monthLabel(prevKey)} sind keine Wochenstunden hinterlegt.`);
+    });
+  }
+
+  const recalcBtn = document.getElementById('recalcVacSick');
+  if(recalcBtn){
+    recalcBtn.addEventListener('click', async ()=>{
+      let updated = 0;
+      let skippedNoRate = 0;
+      try{
+        for(const emp of activeEmployees){
+          const tdoc = targets.find(t=>t.employeeId===emp.id && t.month===sollstundenMonth);
+          const affected = entries.filter(en=>
+            en.employeeId===emp.id &&
+            (en.type==='vacation'||en.type==='sick') &&
+            en.date.startsWith(sollstundenMonth)
+          );
+          if(!affected.length) continue;
+          if(!tdoc){ skippedNoRate += affected.length; continue; }
+          const rate = dailyRate(tdoc.hours, tdoc.workDays);
+          for(const en of affected){
+            if(en.hours===rate) continue;
+            await db.collection('entries').doc(en.id).set({ employeeId: en.employeeId, date: en.date, type: en.type, start: null, end: null, hours: rate, note: en.note||null });
+            updated++;
+          }
+        }
+        const msgs = [];
+        if(updated>0) msgs.push(`${updated} Eintrag${updated===1?'':'e'} auf den aktuellen Tagessatz aktualisiert`);
+        if(skippedNoRate>0) msgs.push(`${skippedNoRate} Eintrag${skippedNoRate===1?'':'e'} ohne hinterlegte Wochenstunden übersprungen`);
+        toast(msgs.length? msgs.join('; ')+'.' : `Für ${monthLabel(sollstundenMonth)} gibt es keine Urlaubs-/Krankenstandseinträge.`);
+      }catch(err){ toast('Neuberechnung fehlgeschlagen.'); }
     });
   }
 
